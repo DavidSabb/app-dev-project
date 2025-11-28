@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "582382138356",
+    "project_id": "wealthway-402b4",
+    "storage_bucket": "wealthway-402b4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:582382138356:android:aa3711fefe8aac2f16ffa1",
+        "android_client_info": {
+          "package_name": "com.example.sqlitedemo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjPQfdIWf6UGX6Hd5h1R-BxCtagNzvyW4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
