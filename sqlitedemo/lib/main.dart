@@ -39,11 +39,13 @@ class _HomeState extends State<Home>{
   @override
   Widget build(BuildContext context) {
     print('fireabase apps: ${Firebase.apps.length}');
+    const Color _teal = Color(0xFF2EC4B6);
+    const Color _lightTeal = Color(0xFFC8ECEA);
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        color: Colors.teal,
+        color: _teal,
         child: Column(
           children: [
             const SizedBox(height: 150),
@@ -52,59 +54,59 @@ class _HomeState extends State<Home>{
               'WealthWay',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 42,
+                fontSize: 50,
                 fontFamily: 'Inter',
                 fontWeight: FontWeight.w600,
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 30),
 
             Container(
-              width: 96,
-              height: 96,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.account_balance,
-                size: 48,
+                size: 50,
                 color: Colors.black,
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 30),
 
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  color: Colors.white70,
+                  color: _lightTeal,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(40),
                     topRight: Radius.circular(40),
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 30.0),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 30),
 
                       const Text(
                         'Small Steps.\nBig Savings.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.black,
-                          fontSize: 28,
+                          fontSize: 30,
                           fontFamily: 'Inter',
                           fontWeight: FontWeight.w600,
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 15),
 
                       const Text(
                         'Your journey to financial freedom starts here. '
@@ -119,11 +121,11 @@ class _HomeState extends State<Home>{
                         ),
                       ),
 
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 30),
 
                       SizedBox(
                         width: 230,
-                        height: 52,
+                        height: 50,
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.push(
@@ -132,7 +134,7 @@ class _HomeState extends State<Home>{
                             );
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
+                            backgroundColor: _teal,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
                             ),
@@ -140,7 +142,7 @@ class _HomeState extends State<Home>{
                           child: const Text(
                             'Log In',
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.w600,
                               color: Colors.white
                             ),
@@ -152,7 +154,7 @@ class _HomeState extends State<Home>{
 
                       SizedBox(
                         width: 230,
-                        height: 52,
+                        height: 50,
                         child: ElevatedButton(
                           onPressed: () {
                             Navigator.push(
@@ -161,7 +163,7 @@ class _HomeState extends State<Home>{
                             );
                           },
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.tealAccent,
+                            backgroundColor: Colors.white70,
                             side: BorderSide.none,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
@@ -170,9 +172,9 @@ class _HomeState extends State<Home>{
                           child: const Text(
                             'Register',
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black,
+                              color: Colors.black87,
                             ),
                           ),
                         ),
@@ -206,9 +208,11 @@ class _RegistrationState extends State<Registration> {
 
   @override
   Widget build(BuildContext context) {
+    const Color _teal = Color(0xFF2EC4B6);
+    const Color _lightTeal = Color(0xFFC8ECEA);
 
     return Scaffold(
-      backgroundColor: Colors.teal,
+      backgroundColor: _teal,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -258,7 +262,7 @@ class _RegistrationState extends State<Registration> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.tealAccent,
+                    color: _lightTeal,
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Padding(
