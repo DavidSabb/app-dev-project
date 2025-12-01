@@ -4,10 +4,13 @@ import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:email_validator/email_validator.dart';
+import 'package:http/http.dart' as http;
+import 'stockModel.dart';
+import 'constants.dart';
+import 'api_service.dart';
 
 
 Future<void> main() async {
@@ -1673,15 +1676,6 @@ class _SettingsState extends State<Settings> {
         'email': email,
       });
 
-      // Optional: update local session user if your SessionManager supports it
-      // final updatedUser = _user!.copyWith(
-      //   firstName: first,
-      //   lastName: last,
-      //   email: email,
-      // );
-      // await SessionManager.instance.setCurrentUser(updatedUser);
-      // _user = updatedUser;
-
       if (!mounted) return;
       ScaffoldMessenger.of(context as BuildContext).showSnackBar(
         SnackBar(content: Text('Profile updated.')),
@@ -1884,22 +1878,30 @@ class Invest extends StatefulWidget {
 
 class _InvestState extends State<Invest> {
   int _selectedTab = 0; // 0 = Invest, 1 = Holdings
-
-  late Future<List<Stock>> _stocksFuture;
+  List<StockModel>? _stockModel = [];
 
   @override
   void initState() {
     super.initState();
-    _stocksFuture = _fetchDummyStocks();
+    _getStocks();
   }
 
-  Future<List<Stock>> _fetchDummyStocks() async {
-    //TODO IMPLEMENT API FETCHING FOR REALTIME STOCKS
-    return [
-      Stock(name: 'Nvidia', price: 110, logoUrl: ''),
-      Stock(name: 'AMD',    price: 250, logoUrl: ''),
-      Stock(name: 'Apple',  price: 270, logoUrl: ''),
-    ];
+  void _getStocks() async {
+    print("Starting _getStocks()");
+    final api = ApiService();
+
+    List<String> symbols = ["AAPL", "GOOG", "NVDA", "AMD", "MSFT"];
+
+    List<StockModel> temp = [];
+    for (String symbol in symbols) {
+      print(" Fetching: $symbol");
+
+      final stock = await api.getStocks(symbol);
+      if (stock != null) temp.add(stock);
+    }
+    setState(() {
+      _stockModel = temp;
+    });
   }
 
   @override
@@ -2002,44 +2004,23 @@ class _InvestState extends State<Invest> {
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Padding(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: FutureBuilder<List<Stock>>(
-                      future: _stocksFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        } else if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error loading stocks',
-                              style: TextStyle(color: Colors.red[900]),
-                            ),
-                          );
-                        }
-
-                        final stocks = snapshot.data ?? [];
-
-                        if (stocks.isEmpty) {
-                          return const Center(
-                            child: Text('No stocks found'),
-                          );
-                        }
-
-                        return ListView.separated(
-                          itemCount: stocks.length,
-                          separatorBuilder: (_, __) =>
-                          const Divider(height: 1, color: Colors.black12),
-                          itemBuilder: (context, index) {
-                            final stock = stocks[index];
-                            return _StockRow(
-                              stock: stock,
-                              onBuyPressed: () {
-                                // TODO: handle Buy / open details
-                              },
-                            );
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: _stockModel == null || _stockModel!.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView.separated(
+                      itemCount: _stockModel!.length,
+                      separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Colors.black12),
+                      itemBuilder: (context, index) {
+                        final stock = _stockModel![index];
+                        return _StockRow(
+                          stock: Stock(
+                            name: stock.symbol,
+                            price: stock.price,
+                            logoUrl: stock.image,
+                          ),
+                          onBuyPressed: () {
+                            // buy logic here
                           },
                         );
                       },
