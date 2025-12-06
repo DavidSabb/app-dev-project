@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:email_validator/email_validator.dart';
@@ -1877,13 +1876,34 @@ class Invest extends StatefulWidget {
 }
 
 class _InvestState extends State<Invest> {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  AppUser? _user;
+  double _cash = 0;
+  double _yearlyGoal = 0;
+  double _totalInvested = 0;
   int _selectedTab = 0; // 0 = Invest, 1 = Holdings
   List<StockModel>? _stockModel = [];
 
   @override
   void initState() {
     super.initState();
+    _loadUserInvestData();
     _getStocks();
+  }
+
+  Future<void> _loadUserInvestData() async {
+    _user = await SessionManager.instance.getCurrentUser();
+    if (_user == null) return;
+
+    final doc = await _db.collection('users').doc(_user!.id).get();
+    final data = doc.data() ?? {};
+
+    setState(() {
+      _cash = (data['cash'] as num?)?.toDouble() ?? 0;
+      _totalInvested = (data['totalInvested'] as num?)?.toDouble() ?? 0;
+      _yearlyGoal =
+          (data['yearlyInvestmentGoal'] as num?)?.toDouble() ?? 0;
+    });
   }
 
   void _getStocks() async {
@@ -1904,8 +1924,344 @@ class _InvestState extends State<Invest> {
     });
   }
 
+  void _showBuyDialog(BuildContext context, Stock stock) {
+    final TextEditingController sharesController =
+    TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        int shares = 1;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final total = shares * stock.price;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              contentPadding: const EdgeInsets.all(20),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Image.network(stock.logoUrl, height: 40),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${stock.name} \$${stock.price.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  const Text('# of Shares'),
+                  const SizedBox(height: 8),
+
+                  TextField(
+                    controller: sharesController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        shares = int.tryParse(value) ?? 1;
+                        if (shares < 1) shares = 1;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    'Amount: \$${total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _placeBuyOrder(
+                        stock,
+                        shares.toString(),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2EC4B6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Place Order',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSellDialog(Stock stock, double maxShares) {
+    final TextEditingController controller =
+    TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Image.network(stock.logoUrl, height: 40),
+                const SizedBox(width: 12),
+                Text(stock.name, style: const TextStyle(fontSize: 18)),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            Text('Max shares: ${maxShares.toStringAsFixed(2)}'),
+            const SizedBox(height: 8),
+
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _placeSellOrder(stock, controller.text);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              child: const Text(
+                'Place Sell Order',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  Future<void> _placeSellOrder(Stock stock, String sharesText) async {
+    if (_user == null) return;
+
+    final sellShares = double.tryParse(sharesText) ?? 0;
+    if (sellShares <= 0) return;
+
+    final userRef = _db.collection('users').doc(_user!.id);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? {};
+
+      final cash = (data['cash'] as num?)?.toDouble() ?? 0;
+      final invested = (data['totalInvested'] as num?)?.toDouble() ?? 0;
+      final holdings = Map<String, dynamic>.from(data['holdings'] ?? {});
+
+      final holding = holdings[stock.name];
+      if (holding == null) return;
+
+      final ownedShares = (holding['shares'] as num).toDouble();
+      final avgPrice = (holding['avgPrice'] as num).toDouble();
+
+      if (sellShares > ownedShares) return;
+
+      final sellAmount = sellShares * avgPrice;
+      final remainingShares = ownedShares - sellShares;
+
+      if (remainingShares <= 0) {
+        holdings.remove(stock.name);
+      } else {
+        holdings[stock.name]['shares'] = remainingShares;
+        holdings[stock.name]['totalValue'] =
+            remainingShares * avgPrice;
+      }
+
+      tx.update(userRef, {
+        'cash': cash + sellAmount,
+        'totalInvested': (invested - sellAmount).clamp(0, double.infinity),
+        'holdings': holdings,
+      });
+    });
+
+    await _loadUserInvestData();
+  }
+
+  Future<void> _placeBuyOrder(Stock stock, String sharesText) async {
+    if (_user == null) return;
+
+    final shares = int.tryParse(sharesText) ?? 0;
+    if (shares <= 0) return;
+
+    final totalCost = shares * stock.price;
+
+    if (_cash < totalCost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Not enough cash')),
+      );
+      return;
+    }
+
+    final userRef = _db.collection('users').doc(_user!.id);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? {};
+
+      final currentCash =
+          (data['cash'] as num?)?.toDouble() ?? 0;
+      final currentInvested =
+          (data['totalInvested'] as num?)?.toDouble() ?? 0;
+
+      final holdings =
+      Map<String, dynamic>.from(data['holdings'] ?? {});
+
+      final existing = holdings[stock.name];
+
+      double newShares = shares.toDouble();
+      double newAvgPrice = stock.price;
+
+      if (existing != null) {
+        final oldShares = (existing['shares'] as num).toDouble();
+        final oldAvg = (existing['avgPrice'] as num).toDouble();
+
+        newAvgPrice =
+            ((oldShares * oldAvg) + totalCost) /
+                (oldShares + newShares);
+
+        newShares += oldShares;
+      }
+
+      holdings[stock.name] = {
+        'symbol': stock.name,
+        'logoUrl': stock.logoUrl,
+        'shares': newShares,
+        'avgPrice': newAvgPrice,
+        'totalValue': newShares * newAvgPrice,
+      };
+
+      tx.update(userRef, {
+        'cash': currentCash - totalCost,
+        'totalInvested': currentInvested + totalCost,
+        'holdings': holdings,
+      });
+    });
+
+    await _loadUserInvestData();
+  }
+
+  Widget _buildInvestList() {
+    if (_stockModel == null || _stockModel!.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView.separated(
+      itemCount: _stockModel!.length,
+      separatorBuilder: (_, __) =>
+      const Divider(height: 1, color: Colors.black12),
+      itemBuilder: (context, index) {
+        final stock = _stockModel![index];
+
+        final uiStock = Stock(
+          name: stock.symbol,
+          price: stock.price,
+          logoUrl: stock.image,
+        );
+
+        return _StockRow(
+          stock: uiStock,
+          onBuyPressed: () {
+            _showBuyDialog(context, uiStock);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHoldings() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _db
+          .collection('users')
+          .doc(_user!.id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final holdings =
+        Map<String, dynamic>.from(data['holdings'] ?? {});
+
+        if (holdings.isEmpty) {
+          return const Center(child: Text('No holdings yet'));
+        }
+
+        return ListView(
+          children: holdings.values.map((h) {
+            return _HoldingRow(
+              symbol: h['symbol'],
+              logoUrl: h['logoUrl'], // ✅ now loaded
+              shares: (h['shares'] as num).toDouble(),
+              avgPrice: (h['avgPrice'] as num).toDouble(),
+              totalValue: (h['totalValue'] as num).toDouble(),
+              onSellPressed: () {
+                _showSellDialog(
+                  Stock(
+                    name: h['symbol'],
+                    price: (h['avgPrice'] as num).toDouble(),
+                    logoUrl: h['logoUrl'],
+                  ),
+                  (h['shares'] as num).toDouble(),
+                );
+              },
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
+    final progress = (_yearlyGoal <= 0)
+        ? 0.0
+        : (_totalInvested / _yearlyGoal).clamp(0.0, 1.0);
+
     const Color _teal = Color(0xFF2EC4B6);
     const Color _lightTeal = Color(0xFFC8ECEA);
     return Scaffold(
@@ -1918,7 +2274,7 @@ class _InvestState extends State<Invest> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text(
                     'Investments',
                     style: TextStyle(
@@ -1928,17 +2284,13 @@ class _InvestState extends State<Invest> {
                     ),
                   ),
                   Text(
-                    'Cash: \$513',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
+                    'Cash: \$${_cash.toStringAsFixed(0)}',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ],
               ),
 
               const SizedBox(height: 8),
-
               Center(
                 child: SizedBox(
                   width: 190,
@@ -1950,19 +2302,19 @@ class _InvestState extends State<Invest> {
                         width: 170,
                         height: 170,
                         child: CircularProgressIndicator(
-                          value: 0.8,
+                          value: progress,
                           strokeWidth: 10,
                           backgroundColor: Colors.white24,
                           valueColor: const AlwaysStoppedAnimation<Color>(
                               Colors.white),
                         ),
                       ),
-                      const Column(
+                      Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '\$7313.32',
-                            style: TextStyle(
+                            '\$${_totalInvested.toStringAsFixed(2)}',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
@@ -2005,26 +2357,9 @@ class _InvestState extends State<Invest> {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: _stockModel == null || _stockModel!.isEmpty
-                        ? const Center(child: CircularProgressIndicator())
-                        : ListView.separated(
-                      itemCount: _stockModel!.length,
-                      separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: Colors.black12),
-                      itemBuilder: (context, index) {
-                        final stock = _stockModel![index];
-                        return _StockRow(
-                          stock: Stock(
-                            name: stock.symbol,
-                            price: stock.price,
-                            logoUrl: stock.image,
-                          ),
-                          onBuyPressed: () {
-                            // buy logic here
-                          },
-                        );
-                      },
-                    ),
+                    child: _selectedTab == 0
+                        ? _buildInvestList()
+                        : _buildHoldings(),
                   ),
                 ),
               ),
@@ -2133,6 +2468,102 @@ class _StockRow extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HoldingRow extends StatelessWidget {
+  final String symbol;
+  final String logoUrl;
+  final double shares;
+  final double avgPrice;
+  final double totalValue;
+  final VoidCallback onSellPressed;
+
+  const _HoldingRow({
+    required this.symbol,
+    required this.logoUrl,
+    required this.shares,
+    required this.avgPrice,
+    required this.totalValue,
+    required this.onSellPressed,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.network(
+              logoUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+              const Icon(Icons.show_chart),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  symbol,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '${shares.toStringAsFixed(2)} shares @ \$${avgPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '\$${totalValue.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 32,
+                child: ElevatedButton(
+                  onPressed: onSellPressed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Sell',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
