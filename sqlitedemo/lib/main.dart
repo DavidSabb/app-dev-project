@@ -1299,6 +1299,10 @@ class _SpendingState extends State<Spending> {
 
         final currentCash =
             (userData['cash'] as num?)?.toDouble() ?? 0;
+        if (amount > currentCash) {
+          throw Exception('INSUFFICIENT_CASH');
+        }
+
         final newCash = currentCash - amount;
 
         // 1) add spending
@@ -1317,14 +1321,46 @@ class _SpendingState extends State<Spending> {
       _amountController.text = '0.00';
       await _loadSpendingData();
 
+      if (_weeklyGoal > 0 && _spentThisWeek / _weeklyGoal >= 0.75) {
+        if (!mounted) return;
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text('Spending Alert'),
+            content: Text(
+              _spentThisWeek >= _weeklyGoal
+                  ? 'You have reached your weekly spending limit.'
+                  : 'You are nearing your weekly spending limit.\n\n'
+                  'You have used ${( (_spentThisWeek / _weeklyGoal) * 100).toStringAsFixed(0)}% '
+                  'of your budget.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context as BuildContext).showSnackBar(
         const SnackBar(content: Text('Spending added.')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context as BuildContext).showSnackBar(
-        SnackBar(content: Text('Failed to add spending: $e')),
+
+      final message = e.toString().contains('INSUFFICIENT_CASH')
+          ? 'You do not have enough cash for this spending.'
+          : 'Failed to add spending: $e';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) {
