@@ -9,7 +9,6 @@ Summaries of savings goals, progress, budget health, and upcoming targets
 Simple and visual indicators for clarity
 
 ## Savings Goal
-Create custom goals (e.g., “Buy a car”, “Emergency fund”, “New laptop”).
 
 Track contributions over time.
 
